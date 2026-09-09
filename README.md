@@ -49,6 +49,7 @@ src/
   styles.css             共通トークン、レイアウト、レスポンシブ・モーション設定
 index.html               HTML言語、タイトル、メタ情報
 vite.config.js           Reactプラグインとテスト設定
+vercel.json              Vercelのビルド・出力先とSPAフォールバック設定
 package.json             依存パッケージ、起動・ビルド・テストコマンド
 package-lock.json        依存バージョンの固定
 .gitignore               生成物・環境変数の除外
@@ -117,8 +118,40 @@ PCの開閉状態だけを`localStorage`へ保存し、モバイルの一時的�
 
 開発時の`StrictMode`はReactが副作用を検証するため初回に追加実行を行います。ルート遷移による再マウントではありません。
 
-## 公開する場合
+## Vercel Hobbyで公開する（GitHub連携）
 
-`dist/`を静的ホスティングへ配置できます。`BrowserRouter`を使用しているため、`/page1`などへの直接アクセス・再読み込みを処理するには、サーバーで未解決のアプリURLを`index.html`にフォールバックさせてください。Viteの開発・プレビューサーバーはこの動作に対応しています。サブディレクトリへ公開する場合はViteの`base`と`BrowserRouter`の`basename`を揃えます。
+1. このプロジェクトをGitHubリポジトリへpushします。`vercel.json`と`package-lock.json`も含めます。`dist/`と`node_modules/`は不要です。
+2. VercelのHobbyアカウントで新しいProjectを作成し、GitHubを接続して対象リポジトリをImportします。
+3. Root Directoryは`package.json`と`vercel.json`があるディレクトリにします。リポジトリ直下に配置した場合は初期値のままです。
+4. 以下の設定を確認してDeployします。Framework、Build Command、Output Directoryは`vercel.json`でも指定済みです。
+
+| 項目 | 設定 |
+| --- | --- |
+| Framework Preset | Vite |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+| Install Command | 自動検出（npm / package-lock.json） |
+
+Node.jsは`package.json`の`engines`を満たすバージョンを使用します。このアプリに環境変数やVercel CLI、GitHub Actionsの追加設定は不要です。接続後はProduction Branch（通常`main`）へのpushで本番が更新され、他のブランチへのpushやPull RequestではPreview Deploymentが作成されます。
+
+### 直接アクセスと再読み込み
+
+`vercel.json`にVercel公式のVite SPA向けrewriteを設定しています。
+
+```json
+"rewrites": [
+  { "source": "/(.*)", "destination": "/index.html" }
+]
+```
+
+`/page1`、`/page2`、`/settings`を直接開いた場合も、Vercelが`index.html`を返し、BrowserRouterがURLに対応するページを描画します。リダイレクトではないため、アドレスバーのURLは維持されます。既存のJS・CSSなどの静的ファイルはそのまま配信されます。
+
+Viteの`base`は`'/'`を明示し、BrowserRouterは`basename`なしのままです。`https://プロジェクト名.vercel.app/`のようなルートドメインで動作します。HashRouterへの変更は不要です。
+
+デプロイ後は公開URLの`/page1`、`/page2`、`/settings`を直接開き、各ページで再読み込みして表示を確認してください。`npm run preview`はVercelのrewrite自体を検証するものではありません。
+
+公式手順: [Vite on Vercel（SPA設定）](https://vercel.com/docs/frameworks/frontend/vite#using-vite-to-make-spas)、[GitHub連携と自動デプロイ](https://vercel.com/docs/git/vercel-for-github)。
+
+他の静的ホスティングへ`dist/`を配置する場合も、未解決のアプリURLを`index.html`にフォールバックさせてください。サブディレクトリへ公開する場合はViteの`base`と`BrowserRouter`の`basename`を揃えます。
 
 参考: [React Routerのルーティング](https://reactrouter.com/start/declarative/routing)、[Viteのガイド](https://vite.dev/guide/)。

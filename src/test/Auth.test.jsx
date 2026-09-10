@@ -1,4 +1,4 @@
-import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router';
@@ -26,7 +26,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 } }));
 
 const session = (id = 'google-user') => ({ access_token: `token-${id}`, user: {
-  id, user_metadata: { full_name: '山田 太郎', avatar_url: 'https://example.com/avatar.png', role: 'admin' },
+  id, email: 'taro@example.com', user_metadata: { full_name: '山田 太郎', avatar_url: 'https://example.com/avatar.png', role: 'admin' },
 } });
 
 beforeEach(() => {
@@ -44,14 +44,76 @@ describe('Google認証と権限', () => {
     await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
     expect(mock.oauth).toHaveBeenCalledWith({ provider: 'google', options: { redirectTo: `${window.location.origin}/` } });
     act(() => mock.listener('SIGNED_IN', session()));
-    const account = await screen.findByRole('button', { name: '山田 太郎：ログアウト' });
+    const account = await screen.findByRole('button', { name: '山田 太郎：アカウントメニュー' });
     expect(account.className).toBe('sidebar-footer');
     expect(account.querySelector('img').getAttribute('src')).toBe('https://example.com/avatar.png');
     fireEvent.error(account.querySelector('img'));
     expect(account.querySelector('.avatar').textContent).toBe('山');
     await user.click(account);
+    expect(mock.signOut).not.toHaveBeenCalled();
+    const menu = screen.getByRole('dialog', { name: 'アカウントメニュー' });
+    expect(within(menu).getByText('山田 太郎')).toBeTruthy();
+    expect(within(menu).getByText('taro@example.com')).toBeTruthy();
+    await user.click(within(menu).getByRole('button', { name: 'ログアウト' }));
     expect(mock.signOut).toHaveBeenCalledWith({ scope: 'local' });
     expect(screen.getByRole('button', { name: 'Googleでログイン' })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'アカウントメニュー' })).toBeNull();
+  });
+
+  it.each([['admin', '管理者'], ['editor', '編集者'], ['viewer', '閲覧者'], [null, '未設定']])('プロフィールの%sを%sと表示する', async (role, label) => {
+    mock.initial = session();
+    mock.query.mockResolvedValue({ data: role ? { role, is_allowed: true } : null, error: null });
+    const user = userEvent.setup();
+    render(<BrowserRouter><App /></BrowserRouter>);
+    await user.click(screen.getByRole('button', { name: '山田 太郎：アカウントメニュー' }));
+    const menu = screen.getByRole('dialog', { name: 'アカウントメニュー' });
+    expect(await within(menu).findByText(`権限：${label}`)).toBeTruthy();
+    expect(menu.querySelector('img').getAttribute('src')).toBe('https://example.com/avatar.png');
+    expect(mock.signOut).not.toHaveBeenCalled();
+  });
+
+  it('再クリック・外側クリック・Esc・折りたたみで閉じ、コンパクト表示でも開ける', async () => {
+    mock.initial = session();
+    const user = userEvent.setup();
+    render(<BrowserRouter><App /></BrowserRouter>);
+    const account = screen.getByRole('button', { name: '山田 太郎：アカウントメニュー' });
+    const menu = () => screen.queryByRole('dialog', { name: 'アカウントメニュー' });
+    await user.click(account);
+    expect(account.getAttribute('aria-expanded')).toBe('true');
+    await user.click(account);
+    expect(menu()).toBeNull();
+    await user.click(account);
+    await user.click(screen.getByRole('heading', { level: 1 }));
+    expect(menu()).toBeNull();
+    await user.click(account);
+    await user.keyboard('{Escape}');
+    expect(menu()).toBeNull();
+    expect(document.activeElement).toBe(account);
+    await user.click(account);
+    // 外側クリックに依存せず、キーボード/プログラムによる閉鎖でもメニューを閉じる。
+    fireEvent.click(screen.getByRole('button', { name: 'サイドパネルを閉じる' }));
+    expect(menu()).toBeNull();
+    await user.click(account);
+    expect(menu()).toBeTruthy();
+    expect(mock.signOut).not.toHaveBeenCalled();
+  });
+
+  it('モバイルのEscはメニューを先に閉じ、サイドパネル閉鎖後に再表示しない', async () => {
+    mock.initial = session();
+    window.matchMedia = vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    const user = userEvent.setup();
+    render(<BrowserRouter><App /></BrowserRouter>);
+    await user.click(screen.getByRole('button', { name: 'メニューを開く' }));
+    const account = screen.getByRole('button', { name: '山田 太郎：アカウントメニュー' });
+    await user.click(account);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'アカウントメニュー' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'サイドパネル' })).toBeTruthy();
+    await user.click(account);
+    fireEvent.click(screen.getByRole('button', { name: 'メニューを閉じる' }));
+    await user.click(screen.getByRole('button', { name: 'メニューを開く' }));
+    expect(screen.queryByRole('dialog', { name: 'アカウントメニュー' })).toBeNull();
+    expect(mock.signOut).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -163,7 +163,7 @@ Viteの`base`は`'/'`を明示し、BrowserRouterは`basename`なしのままで
 3. Supabase AuthenticationのURL ConfigurationでSite URLを本番URLに設定し、Redirect URLsに`http://localhost:5173/`と本番URL（末尾`/`付き）を登録します。ログイン後は同じオリジンのホームへ戻ります。
 4. SQL Editorで[`supabase/auth.sql`](supabase/auth.sql)を実行します。既に`profiles`が存在する場合は既存定義と照合して適用してください。初回ログイン後、Authentication > UsersのUUIDを使い、許可するユーザーの`profiles`行に`role`（`admin` / `editor` / `viewer`）と`is_allowed = true`を管理者が設定します。自動登録・自己昇格は行いません。
 
-サイドパネル下部をクリックするとGoogleログインを開始します。ログイン後は名前・画像を表示し、同じ場所のクリックで現在のブラウザからログアウトします。長い名前は省略し、画像を取得できない場合は名前の先頭文字を表示します。
+サイドパネル下部をクリックするとGoogleログインを開始します。ログイン後は名前・画像を表示し、同じ場所をクリックすると直上にアカウントメニューが開きます。メニューには名前・画像・メールアドレス・権限を表示し、「ログアウト」を押した場合のみ現在のブラウザからログアウトします。外側のクリック、Esc、サイドパネルを閉じたときにメニューも閉じます。長い名前はユーザー欄では省略し、メニューでは折り返します。画像を取得できない場合は名前の先頭文字を表示します。
 
 ページ内では`const { auth } = useOutletContext()`で`auth.user` / `auth.role` / `auth.canEdit` / `auth.loading`を参照できます。`canEdit`は許可済みのadmin/editorのみtrueです。未ログイン、未登録、未許可、viewer、権限取得中・失敗時はfalseです。権限はユーザーメタデータではなく`profiles`から読み、認証イベント時に再取得します。
 

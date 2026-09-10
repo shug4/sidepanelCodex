@@ -8,11 +8,45 @@ const defaultFooter = <><span className="avatar">U</span><span className="user-i
 
 function Sidebar({ collapsed, isMobile, mobileOpen, onToggle, onClose, onExpand, items = menuItems, brand = defaultBrand, footer = defaultFooter, auth }) {
   const sidebarRef = useRef(null);
+  const accountRef = useRef(null);
+  const accountButtonRef = useRef(null);
+  const logoutRef = useRef(null);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [failedAvatar, setFailedAvatar] = useState(null);
   const compact = !isMobile && collapsed;
   const metadata = auth?.user?.user_metadata;
   const name = metadata?.full_name || metadata?.name || auth?.user?.email || 'ユーザー';
   const avatar = metadata?.avatar_url || metadata?.picture;
+  const roleLabel = { admin: '管理者', editor: '編集者', viewer: '閲覧者' }[auth?.role] ?? (auth?.loading ? '取得中' : '未設定');
+  const accountAvatar = <span className="avatar">{avatar && failedAvatar !== avatar ? <img src={avatar} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatar(avatar)} /> : name.slice(0, 1)}</span>;
+
+  useEffect(() => {
+    setAccountOpen(false);
+  }, [collapsed, isMobile, mobileOpen, auth?.user?.id]);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    logoutRef.current?.focus();
+    const closeOutside = (event) => {
+      if (!accountRef.current?.contains(event.target)) setAccountOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key !== 'Escape') return;
+      // モバイルでは最初のEscでポップアップだけを閉じる。
+      event.preventDefault();
+      event.stopPropagation();
+      setAccountOpen(false);
+      accountButtonRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', closeOutside, true);
+    document.addEventListener('focusin', closeOutside);
+    document.addEventListener('keydown', closeOnEscape, true);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside, true);
+      document.removeEventListener('focusin', closeOutside);
+      document.removeEventListener('keydown', closeOnEscape, true);
+    };
+  }, [accountOpen]);
 
   useEffect(() => {
     if (!isMobile || !mobileOpen) return;
@@ -65,15 +99,26 @@ function Sidebar({ collapsed, isMobile, mobileOpen, onToggle, onClose, onExpand,
           ))}
         </nav>
         {auth && footer === defaultFooter ? (
-          <button type="button" className="sidebar-footer" onClick={auth.accountAction}
-            disabled={auth.busy || auth.loading && !auth.user}
-            aria-label={auth.user ? `${name}：ログアウト` : 'Googleでログイン'}
-            title={auth.error || (auth.user ? 'ログアウト' : 'Googleでログイン')}>
-            {auth.user ? <>
-              <span className="avatar">{avatar && failedAvatar !== avatar ? <img src={avatar} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatar(avatar)} /> : name.slice(0, 1)}</span>
-              <span className="user-info">{name}<span>ログアウト</span></span>
-            </> : defaultFooter}
-          </button>
+          <div className="sidebar-account" ref={accountRef}>
+            {auth.user && accountOpen && (
+              <div id="account-menu" className="account-menu" role="dialog" aria-label="アカウントメニュー">
+                <div className="account-menu-identity">{accountAvatar}<span className="account-menu-name">{name}</span></div>
+                <p className="account-menu-email">{auth.user.email}</p>
+                <p className="account-menu-role">権限：{roleLabel}</p>
+                <button type="button" className="account-menu-logout" ref={logoutRef} disabled={auth.busy} onClick={auth.accountAction}>ログアウト</button>
+              </div>
+            )}
+            <button type="button" className="sidebar-footer" ref={accountButtonRef}
+              onClick={auth.user ? () => setAccountOpen((open) => !open) : auth.accountAction}
+              disabled={auth.busy || auth.loading && !auth.user}
+              aria-label={auth.user ? `${name}：アカウントメニュー` : 'Googleでログイン'}
+              aria-haspopup={auth.user ? 'dialog' : undefined}
+              aria-expanded={auth.user ? accountOpen : undefined}
+              aria-controls={auth.user && accountOpen ? 'account-menu' : undefined}
+              title={auth.error || (auth.user ? 'アカウントメニュー' : 'Googleでログイン')}>
+              {auth.user ? <>{accountAvatar}<span className="user-info">{name}<span>パーソナルスペース</span></span></> : defaultFooter}
+            </button>
+          </div>
         ) : <div className="sidebar-footer">{footer}</div>}
       </aside>
     </>

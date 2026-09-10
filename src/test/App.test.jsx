@@ -5,6 +5,9 @@ import { BrowserRouter } from 'react-router';
 import App from '../App';
 import Sidebar from '../components/Sidebar/Sidebar';
 
+// レイアウト単体テストはローカルの.envや実際の認証ストレージに依存させない。
+vi.mock('../lib/supabase', () => ({ supabase: null }));
+
 function renderApp() { return render(<BrowserRouter><App /></BrowserRouter>); }
 
 describe('再利用できるSPAレイアウト', () => {

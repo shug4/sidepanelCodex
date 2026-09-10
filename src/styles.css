@@ -148,6 +148,28 @@ h1 { font-size: clamp(26px, 2.4vw, 32px); line-height: 1.45; letter-spacing: -.7
 }
 
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.user-management select, .user-invite-form input { font: inherit; color: inherit; border: 1px solid var(--border); border-radius: 7px; background: #fff; padding: 9px 10px; max-width: 100%; }
+.user-management button:disabled, .user-management select:disabled { cursor: default; opacity: .55; }
+.user-invite-form { padding: 24px; margin-bottom: 24px; }
+.user-invite-form > p { color: var(--muted); font-size: 14px; line-height: 1.7; }
+.user-invite-fields { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; }
+.user-invite-fields label { display: grid; gap: 8px; font-size: 14px; }
+.user-invite-fields label:first-child { flex: 1; min-width: min(220px, 100%); }
+.user-table-scroll { overflow-x: auto; }
+.user-table { width: 100%; min-width: 660px; border-collapse: collapse; font-size: 14px; text-align: left; }
+.user-management .section-heading { gap: 12px; flex-wrap: wrap; }
+.user-table th, .user-table td { padding: 16px; border-bottom: 1px solid var(--border); }
+.user-table th { background: #fafbfc; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.user-table tr:last-child td { border-bottom: 0; }
+.user-table td { overflow-wrap: anywhere; }
+.user-table .primary-button, .user-table select { white-space: nowrap; }
+.user-table-caption { text-align: left; padding: 16px; color: var(--muted); font-size: 12px; }
+.managed-user { display: flex; align-items: center; gap: 10px; min-width: 140px; }
+.managed-user small { display: block; margin-top: 4px; color: var(--muted); }
+.user-allowed { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.user-admin-note { color: var(--muted); font-size: 13px; }
+.user-invitations { margin-top: 32px; }
+.user-empty { margin: 0; padding: 20px; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }

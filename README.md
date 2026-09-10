@@ -161,14 +161,43 @@ Viteの`base`は`'/'`を明示し、BrowserRouterは`basename`なしのままで
 1. `.env.example`を`.env`にコピーし、SupabaseのProject URLと`sb_publishable_...`形式のPublishable Keyを設定します。`.env`はGit管理対象外です。service_role / Secret Keyは使用しません。変更後は開発サーバーを再起動し、本番は再ビルドします。
 2. Google CloudでWeb用OAuthクライアントを作成し、リダイレクトURIにSupabaseのGoogle Provider画面に表示されるCallback URL（通常`https://PROJECT_REF.supabase.co/auth/v1/callback`）を登録します。Supabase AuthenticationのGoogle Providerを有効にし、Client IDとClient Secretを設定します。Google同意画面がテスト中なら対象アカウントをテストユーザーに登録します。
 3. Supabase AuthenticationのURL ConfigurationでSite URLを本番URLに設定し、Redirect URLsに`http://localhost:5173/`と本番URL（末尾`/`付き）を登録します。ログイン後は同じオリジンのホームへ戻ります。
-4. SQL Editorで[`supabase/auth.sql`](supabase/auth.sql)を実行します。既に`profiles`が存在する場合は既存定義と照合して適用してください。初回ログイン後、Authentication > UsersのUUIDを使い、許可するユーザーの`profiles`行に`role`（`admin` / `editor` / `viewer`）と`is_allowed = true`を管理者が設定します。自動登録・自己昇格は行いません。
+4. 初期構築時はSQL Editorで[`supabase/auth.sql`](supabase/auth.sql)を実行します。適用済みなら再実行は不要です。既に独自の`profiles`が存在する場合は既存定義と照合してください。最初の管理者は初回ログイン後、Authentication > UsersのUUIDを使い、SQL Editorで`profiles`行の`role = 'admin'`と`is_allowed = true`を設定します。ユーザー管理の追加手順は下記を参照してください。
 
 サイドパネル下部をクリックするとGoogleログインを開始します。ログイン後は名前・画像を表示し、同じ場所をクリックすると直上にアカウントメニューが開きます。メニューには名前・画像・メールアドレス・権限を表示し、「ログアウト」を押した場合のみ現在のブラウザからログアウトします。外側のクリック、Esc、サイドパネルを閉じたときにメニューも閉じます。長い名前はユーザー欄では省略し、メニューでは折り返します。画像を取得できない場合は名前の先頭文字を表示します。
 
 ページ内では`const { auth } = useOutletContext()`で`auth.user` / `auth.role` / `auth.canEdit` / `auth.loading`を参照できます。`canEdit`は許可済みのadmin/editorのみtrueです。未ログイン、未登録、未許可、viewer、権限取得中・失敗時はfalseです。権限はユーザーメタデータではなく`profiles`から読み、認証イベント時に再取得します。
 
-現在のページには共有データの編集処理がなく、ブラウザ内のサイドパネル表示設定は全員が利用できます。今後の編集UIと実行ハンドラーでは`auth.canEdit`を確認し、**編集対象テーブルにも必ずRLSを適用**してください。SQL末尾にSELECT/INSERT/UPDATE/DELETEのポリシー例があります。`public.can_edit()`はDB側の現在の権限を参照するため、フロントの値を書き換えてもDBの許可は変更されません。プロフィールへのクライアント書込みは許可していません。
+ブラウザ内のサイドパネル表示設定は全員が利用できます。一般コンテンツの編集UIと実行ハンドラーでは`auth.canEdit`を確認し、**編集対象テーブルにも必ずRLSを適用**してください。`auth.sql`末尾にSELECT/INSERT/UPDATE/DELETEのポリシー例があります。`public.can_edit()`はDB側の現在の権限を参照するため、フロントの値を書き換えてもDBの許可は変更されません。プロフィールへのクライアント直接書込みは許可せず、ユーザー管理のみ管理者専用RPCを使用します。
 
 認証・権限テストはSupabaseをモックして実行します。実際のGoogle OAuthとDB側RLSは上記設定後、許可済みeditor・viewer・未登録アカウントで確認してください。
 
 公式設定手順: [Google OAuth](https://supabase.com/docs/guides/auth/social-login/auth-google)、[RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)。
+
+## 管理者専用のユーザー管理
+
+### Supabaseへの適用
+
+既存の`auth.sql`を適用済みのプロジェクトで、SQL Editorから[`20260910071015_user_management.sql`](supabase/migrations/20260910071015_user_management.sql)を一度実行してください。このリポジトリの作業だけでは接続先プロジェクトへは適用されません。既存の権限行は保持し、プロフィールのない既存ユーザーには`viewer / is_allowed = false`を補います。
+
+- `private`スキーマをData APIの公開スキーマに追加しないでください。招待テーブルはRLS有効・クライアント直接アクセス禁止です。
+- 公開RPCは`admin_get_users`、`admin_update_user`、`admin_invite_user`、`admin_cancel_invitation`の4つです。内部処理は非公開スキーマに置き、毎回`auth.uid()`とDB内の`profiles.role = 'admin' / is_allowed = true`を確認します。一般ユーザーはRPCを直接呼んでも拒否されます。
+- Authユーザー・Google identityのトリガーでプロフィールを作成し、確認済みGoogle identityのメールとAuthの確認済みメールが一致する場合だけ事前招待を適用します。名前やアイコンに使うメタデータから権限を決定することはありません。
+- service_roleキーや新しい環境変数は不要です。管理者の追加・変更はSQL Editorで行い、画面/APIでは自分自身とすべてのadmin行を変更不可にしています。
+
+### 操作
+
+許可済みadminには「管理」カテゴリに「ユーザー管理」（`/users`）が表示されます。一覧は現在オンラインのユーザーではなく、これまでにログインしたアカウントです。editor/viewerと許可ON/OFFを変更し、「保存」で反映します。
+
+「ユーザーを招待」からメールアドレスとeditor/viewerを登録します。メール送信は行いません。メールアドレスの前後の空白・大文字小文字を正規化して照合し、次回Googleログインで指定権限と許可ONを付与します。登録済みのアカウントも次回ログインで反映されます。同じ未使用メールの招待は再登録すると権限を更新します。ログイン待ちの招待は取り消せます。
+
+招待は適用後に削除され、再ログイン時に権限を上書きしません。ユーザー一覧での明示的な権限・許可変更も、そのメールへの未使用招待を取り消します。未招待・未確認のユーザーはログインしても`viewer / is_allowed = false`で編集できません。
+
+### 動作確認
+
+1. `npm test`と`npm run build`でUI・既存機能を検証します。
+2. Supabase適用後、adminで`/users`を開き、一覧・権限変更・許可ON/OFFを確認します。自分の行は変更不可です。
+3. editor/viewer/未許可adminで`/users`を直接開き、一覧・操作が出ないことを確認します。これらのユーザーのセッションで`supabase.rpc('admin_get_users')`や更新RPCを直接呼んだ場合も権限エラーになります。`profiles`への直接UPDATEも拒否されます。
+4. 別のGoogleメールをeditorとして招待し、そのアカウントでログインして編集可能になることを確認します。未招待メールは編集不可、viewer招待は閲覧のみです。
+5. 許可をOFFにして対象ユーザーで再ログインし、権限が復活しないことを確認します。未使用の招待を取り消した場合も権限は付与されません。
+
+DB側の自動テストは[`supabase/tests/user-management.mjs`](supabase/tests/user-management.mjs)です。一時フォルダにPGliteをインストールし、その`dist/index.js`の絶対パスを環境変数`SIDECODEX_PGLITE_PATH`に設定して`node supabase/tests/user-management.mjs`を実行できます。アプリの依存追加は不要です。独立したPostgreSQL上でRLS、RPC、トリガーを検証しますが、実際のGoogle OAuthは上記の実アカウント確認が必要です。

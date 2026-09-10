@@ -91,7 +91,7 @@ function Sidebar({ collapsed, isMobile, mobileOpen, onToggle, onClose, onExpand,
           </button>
         </div>
         <nav id="sidebar-navigation" aria-label="メインメニュー" className="sidebar-navigation">
-          {groupMenu(items).map(([category, entries]) => (
+          {groupMenu(items.filter((item) => !item.adminOnly || auth?.user && !auth.loading && auth.role === 'admin' && auth.canEdit)).map(([category, entries]) => (
             <div className="menu-group" key={category}>
               <p className="menu-category">{category}</p>
               <ul>{entries.map((item) => <SidebarItem key={item.id} item={item} collapsed={compact} onNavigate={onClose} onExpand={onExpand} />)}</ul>

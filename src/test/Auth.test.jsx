@@ -38,10 +38,21 @@ beforeEach(() => {
 });
 
 describe('Google認証と権限', () => {
-  it('既存のユーザー欄からOAuthを開始し、名前・画像を表示してログアウトできる', async () => {
+  it('ユーザー欄で開いたメニューからのみOAuthを開始し、名前・画像を表示してログアウトできる', async () => {
     const user = userEvent.setup();
     render(<BrowserRouter><App /></BrowserRouter>);
-    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }));
+    expect(screen.queryByRole('button', { name: 'Googleでログイン' })).toBeNull();
+    const guest = screen.getByRole('button', { name: 'ゲストモード：アカウントメニュー' });
+    expect(guest.textContent).toBe('ゲストモード');
+    await user.click(guest);
+    const guestMenu = screen.getByRole('dialog', { name: 'アカウントメニュー' });
+    expect(within(guestMenu).getByText('ゲストモード')).toBeTruthy();
+    expect(within(guestMenu).getByText('ログインしていません')).toBeTruthy();
+    expect(mock.oauth).not.toHaveBeenCalled();
+    const login = within(screen.getByRole('dialog', { name: 'アカウントメニュー' })).getByRole('button', { name: 'Googleでログイン' });
+    expect(document.activeElement).toBe(login);
+    await user.click(login);
+    expect(mock.oauth).toHaveBeenCalledOnce();
     expect(mock.oauth).toHaveBeenCalledWith({ provider: 'google', options: { redirectTo: `${window.location.origin}/` } });
     act(() => mock.listener('SIGNED_IN', session()));
     const account = await screen.findByRole('button', { name: '山田 太郎：アカウントメニュー' });
@@ -56,7 +67,7 @@ describe('Google認証と権限', () => {
     expect(within(menu).getByText('taro@example.com')).toBeTruthy();
     await user.click(within(menu).getByRole('button', { name: 'ログアウト' }));
     expect(mock.signOut).toHaveBeenCalledWith({ scope: 'local' });
-    expect(screen.getByRole('button', { name: 'Googleでログイン' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'ゲストモード：アカウントメニュー' })).toBeTruthy();
     expect(screen.queryByRole('dialog', { name: 'アカウントメニュー' })).toBeNull();
   });
 
@@ -72,11 +83,11 @@ describe('Google認証と権限', () => {
     expect(mock.signOut).not.toHaveBeenCalled();
   });
 
-  it('再クリック・外側クリック・Esc・折りたたみで閉じ、コンパクト表示でも開ける', async () => {
-    mock.initial = session();
+  it.each([true, false])('ログイン済み=%s：再クリック・外側クリック・Esc・折りたたみで閉じ、コンパクト表示でも開ける', async (signedIn) => {
+    mock.initial = signedIn ? session() : null;
     const user = userEvent.setup();
     render(<BrowserRouter><App /></BrowserRouter>);
-    const account = screen.getByRole('button', { name: '山田 太郎：アカウントメニュー' });
+    const account = screen.getByRole('button', { name: signedIn ? '山田 太郎：アカウントメニュー' : 'ゲストモード：アカウントメニュー' });
     const menu = () => screen.queryByRole('dialog', { name: 'アカウントメニュー' });
     await user.click(account);
     expect(account.getAttribute('aria-expanded')).toBe('true');
@@ -96,15 +107,16 @@ describe('Google認証と権限', () => {
     await user.click(account);
     expect(menu()).toBeTruthy();
     expect(mock.signOut).not.toHaveBeenCalled();
+    expect(mock.oauth).not.toHaveBeenCalled();
   });
 
-  it('モバイルのEscはメニューを先に閉じ、サイドパネル閉鎖後に再表示しない', async () => {
-    mock.initial = session();
+  it.each([true, false])('ログイン済み=%s：モバイルのEscはメニューを先に閉じ、サイドパネル閉鎖後に再表示しない', async (signedIn) => {
+    mock.initial = signedIn ? session() : null;
     window.matchMedia = vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
     const user = userEvent.setup();
     render(<BrowserRouter><App /></BrowserRouter>);
     await user.click(screen.getByRole('button', { name: 'メニューを開く' }));
-    const account = screen.getByRole('button', { name: '山田 太郎：アカウントメニュー' });
+    const account = screen.getByRole('button', { name: signedIn ? '山田 太郎：アカウントメニュー' : 'ゲストモード：アカウントメニュー' });
     await user.click(account);
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: 'アカウントメニュー' })).toBeNull();
@@ -114,6 +126,7 @@ describe('Google認証と権限', () => {
     await user.click(screen.getByRole('button', { name: 'メニューを開く' }));
     expect(screen.queryByRole('dialog', { name: 'アカウントメニュー' })).toBeNull();
     expect(mock.signOut).not.toHaveBeenCalled();
+    expect(mock.oauth).not.toHaveBeenCalled();
   });
 
   it.each([

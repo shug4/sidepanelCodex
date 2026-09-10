@@ -1,16 +1,23 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { PanelLeftClose, PanelLeftOpen, X, Command } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, X, Command, UserRound } from 'lucide-react';
 import SidebarItem from './SidebarItem';
 import { groupMenu, menuItems } from '../../data/menuItems';
 
 const defaultBrand = <><span className="brand-icon"><Command size={20} aria-hidden="true" /></span><span className="brand-name">Workspace</span></>;
-const defaultFooter = <><span className="avatar">U</span><span className="user-info">ユーザー<span>パーソナルスペース</span></span></>;
+const guestAvatar = <span className="avatar"><UserRound size={20} aria-hidden="true" /></span>;
+const defaultFooter = <>{guestAvatar}<span className="user-info">ゲストモード</span></>;
+const googleIcon = <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+  <path fill="#4285F4" d="M22.56 12.25c0-.73-.06-1.42-.19-2.09H12v3.96h5.92c-.26 1.28-1.04 2.37-2.21 3.1v2.58h3.58c2.08-1.92 3.27-4.75 3.27-7.55Z" />
+  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.67l-3.58-2.78c-.98.66-2.24 1.06-3.7 1.06-2.86 0-5.29-1.93-6.16-4.53H2.15v2.84A11 11 0 0 0 12 23Z" />
+  <path fill="#FBBC05" d="M5.84 14.09A6.6 6.6 0 0 1 5.5 12c0-.73.12-1.43.34-2.09V7.07H2.15A11 11 0 0 0 1 12c0 1.78.43 3.45 1.15 4.93l3.69-2.84Z" />
+  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.16-3.16A10.56 10.56 0 0 0 12 1a11 11 0 0 0-9.85 6.07l3.69 2.84C6.71 7.31 9.14 5.38 12 5.38Z" />
+</svg>;
 
 function Sidebar({ collapsed, isMobile, mobileOpen, onToggle, onClose, onExpand, items = menuItems, brand = defaultBrand, footer = defaultFooter, auth }) {
   const sidebarRef = useRef(null);
   const accountRef = useRef(null);
   const accountButtonRef = useRef(null);
-  const logoutRef = useRef(null);
+  const accountActionRef = useRef(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [failedAvatar, setFailedAvatar] = useState(null);
   const compact = !isMobile && collapsed;
@@ -25,8 +32,12 @@ function Sidebar({ collapsed, isMobile, mobileOpen, onToggle, onClose, onExpand,
   }, [collapsed, isMobile, mobileOpen, auth?.user?.id]);
 
   useEffect(() => {
+    if (auth?.error && !auth.user && (!isMobile || mobileOpen)) setAccountOpen(true);
+  }, [auth?.error, auth?.user?.id, isMobile, mobileOpen]);
+
+  useEffect(() => {
     if (!accountOpen) return;
-    logoutRef.current?.focus();
+    accountActionRef.current?.focus();
     const closeOutside = (event) => {
       if (!accountRef.current?.contains(event.target)) setAccountOpen(false);
     };
@@ -100,22 +111,27 @@ function Sidebar({ collapsed, isMobile, mobileOpen, onToggle, onClose, onExpand,
         </nav>
         {auth && footer === defaultFooter ? (
           <div className="sidebar-account" ref={accountRef}>
-            {auth.user && accountOpen && (
+            {accountOpen && (
               <div id="account-menu" className="account-menu" role="dialog" aria-label="アカウントメニュー">
-                <div className="account-menu-identity">{accountAvatar}<span className="account-menu-name">{name}</span></div>
-                <p className="account-menu-email">{auth.user.email}</p>
-                <p className="account-menu-role">権限：{roleLabel}</p>
-                <button type="button" className="account-menu-logout" ref={logoutRef} disabled={auth.busy} onClick={auth.accountAction}>ログアウト</button>
+                {auth.user ? <>
+                  <div className="account-menu-identity">{accountAvatar}<span className="account-menu-name">{name}</span></div>
+                  <p className="account-menu-email">{auth.user.email}</p>
+                  <p className="account-menu-role">権限：{roleLabel}</p>
+                </> : <div className="account-menu-identity account-menu-guest">
+                  {guestAvatar}<div className="account-menu-guest-text"><strong>ゲストモード</strong><span>ログインしていません</span></div>
+                </div>}
+                {auth.error && <p className="account-menu-role" role="alert">{auth.error}</p>}
+                <button type="button" className={`account-menu-logout${auth.user ? '' : ' account-menu-login'}`} ref={accountActionRef} disabled={auth.busy || auth.loading && !auth.user} onClick={auth.accountAction}>{auth.user ? 'ログアウト' : <>{googleIcon}<span>Googleでログイン</span></>}</button>
               </div>
             )}
             <button type="button" className="sidebar-footer" ref={accountButtonRef}
-              onClick={auth.user ? () => setAccountOpen((open) => !open) : auth.accountAction}
+              onClick={() => setAccountOpen((open) => !open)}
               disabled={auth.busy || auth.loading && !auth.user}
-              aria-label={auth.user ? `${name}：アカウントメニュー` : 'Googleでログイン'}
-              aria-haspopup={auth.user ? 'dialog' : undefined}
-              aria-expanded={auth.user ? accountOpen : undefined}
-              aria-controls={auth.user && accountOpen ? 'account-menu' : undefined}
-              title={auth.error || (auth.user ? 'アカウントメニュー' : 'Googleでログイン')}>
+              aria-label={auth.user ? `${name}：アカウントメニュー` : 'ゲストモード：アカウントメニュー'}
+              aria-haspopup="dialog"
+              aria-expanded={accountOpen}
+              aria-controls={accountOpen ? 'account-menu' : undefined}
+              title={auth.error || 'アカウントメニュー'}>
               {auth.user ? <>{accountAvatar}<span className="user-info">{name}<span>パーソナルスペース</span></span></> : defaultFooter}
             </button>
           </div>

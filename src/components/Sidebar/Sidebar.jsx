@@ -3,7 +3,7 @@ import { PanelLeftClose, PanelLeftOpen, X, Command } from 'lucide-react';
 import SidebarItem from './SidebarItem';
 import { groupMenu, menuItems } from '../../data/menuItems';
 
-const defaultBrand = <><span className="brand-icon"><Command size={20} aria-hidden="true" /></span><span className="brand-name">Workspace<span>マイワークスペース</span></span></>;
+const defaultBrand = <><span className="brand-icon"><Command size={20} aria-hidden="true" /></span><span className="brand-name">Workspace</span></>;
 const defaultFooter = <><span className="avatar">U</span><span className="user-info">ユーザー<span>パーソナルスペース</span></span></>;
 
 function Sidebar({ collapsed, isMobile, mobileOpen, onToggle, onClose, onExpand, items = menuItems, brand = defaultBrand, footer = defaultFooter }) {

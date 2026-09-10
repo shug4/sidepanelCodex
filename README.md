@@ -29,7 +29,7 @@ src/
       SidebarItem.jsx    NavLink、選択表示、再帰的なサブメニュー
     PageHeader.jsx       ページ共通の見出し
   layouts/
-    MainLayout.jsx       Sidebar + ヘッダー + main/Outlet、開閉state、遷移時処理
+    MainLayout.jsx       Sidebar + main/Outlet、モバイルメニューボタン、開閉state、遷移時処理
   pages/
     Home.jsx             ホームとページへのショートカット
     Page1.jsx            /page1 の仮ページ

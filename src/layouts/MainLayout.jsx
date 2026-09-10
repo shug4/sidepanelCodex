@@ -1,22 +1,9 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Outlet, useLocation, matchPath } from 'react-router';
-import { Menu, ChevronRight } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Outlet, useLocation } from 'react-router';
+import { Menu } from 'lucide-react';
 import Sidebar from '../components/Sidebar/Sidebar';
-import { flattenMenu, menuItems } from '../data/menuItems';
 import usePersistentState from '../hooks/usePersistentState';
 import useIsMobile from '../hooks/useIsMobile';
-
-const Header = memo(function Header({ onOpen }) {
-  const { pathname } = useLocation();
-  const current = flattenMenu(menuItems).find((item) => matchPath({ path: item.path, end: item.path === '/' }, pathname));
-  return (
-    <header className="main-header">
-      <button type="button" className="icon-button mobile-menu-button" onClick={onOpen} aria-label="メニューを開く" aria-haspopup="dialog" aria-controls="app-sidebar"><Menu size={21} /></button>
-      <div className="breadcrumb"><span>ワークスペース</span><ChevronRight size={14} aria-hidden="true" /><span>{current?.label ?? 'ページが見つかりません'}</span></div>
-      <span className="header-badge">パーソナル</span>
-    </header>
-  );
-});
 
 // ルート依存の処理を分離し、遷移時にMainLayoutやSidebarのstateを作り直さない。
 function RouteEffects({ onNavigate, contentRef }) {
@@ -49,9 +36,11 @@ export default function MainLayout() {
       <a href="#main-content" className="skip-link">メインコンテンツへ移動</a>
       <Sidebar collapsed={collapsed} isMobile={isMobile} mobileOpen={mobileOpen} onToggle={toggleSidebar} onClose={closeMobile} onExpand={expandSidebar} />
       <div className="main-shell" inert={isMobile && mobileOpen ? true : undefined}>
-        <Header onOpen={openMobile} />
         <main id="main-content" className="main-content" ref={contentRef} tabIndex={-1}>
-          <div className="page-container"><Outlet context={preferences} /></div>
+          <div className="page-container">
+            <button type="button" className="icon-button mobile-menu-button" onClick={openMobile} aria-label="メニューを開く" aria-haspopup="dialog" aria-controls="app-sidebar"><Menu size={21} /></button>
+            <Outlet context={preferences} />
+          </div>
         </main>
       </div>
       <RouteEffects onNavigate={closeMobile} contentRef={contentRef} />

@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react';
 import Sidebar from '../components/Sidebar/Sidebar';
 import usePersistentState from '../hooks/usePersistentState';
 import useIsMobile from '../hooks/useIsMobile';
+import useAuth from '../hooks/useAuth';
 
 // ルート依存の処理を分離し、遷移時にMainLayoutやSidebarのstateを作り直さない。
 function RouteEffects({ onNavigate, contentRef }) {
@@ -19,6 +20,7 @@ function RouteEffects({ onNavigate, contentRef }) {
 }
 
 export default function MainLayout() {
+  const auth = useAuth();
   const [collapsed, setCollapsed] = usePersistentState('workspace.sidebar.collapsed', false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const isMobile = useIsMobile();
@@ -27,14 +29,14 @@ export default function MainLayout() {
   const openMobile = useCallback(() => setMobileOpen(true), []);
   const toggleSidebar = useCallback(() => setCollapsed((value) => !value), [setCollapsed]);
   const expandSidebar = useCallback(() => setCollapsed(false), [setCollapsed]);
-  const preferences = useMemo(() => ({ collapsed, setCollapsed }), [collapsed, setCollapsed]);
+  const preferences = useMemo(() => ({ collapsed, setCollapsed, auth }), [collapsed, setCollapsed, auth]);
 
   useEffect(() => { if (!isMobile) closeMobile(); }, [isMobile, closeMobile]);
 
   return (
     <div className="app">
       <a href="#main-content" className="skip-link">メインコンテンツへ移動</a>
-      <Sidebar collapsed={collapsed} isMobile={isMobile} mobileOpen={mobileOpen} onToggle={toggleSidebar} onClose={closeMobile} onExpand={expandSidebar} />
+      <Sidebar collapsed={collapsed} isMobile={isMobile} mobileOpen={mobileOpen} onToggle={toggleSidebar} onClose={closeMobile} onExpand={expandSidebar} auth={auth} />
       <div className="main-shell" inert={isMobile && mobileOpen ? true : undefined}>
         <main id="main-content" className="main-content" ref={contentRef} tabIndex={-1}>
           <div className="page-container">

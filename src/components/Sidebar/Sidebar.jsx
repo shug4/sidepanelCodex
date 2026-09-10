@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen, X, Command } from 'lucide-react';
 import SidebarItem from './SidebarItem';
 import { groupMenu, menuItems } from '../../data/menuItems';
@@ -6,9 +6,13 @@ import { groupMenu, menuItems } from '../../data/menuItems';
 const defaultBrand = <><span className="brand-icon"><Command size={20} aria-hidden="true" /></span><span className="brand-name">Workspace</span></>;
 const defaultFooter = <><span className="avatar">U</span><span className="user-info">ユーザー<span>パーソナルスペース</span></span></>;
 
-function Sidebar({ collapsed, isMobile, mobileOpen, onToggle, onClose, onExpand, items = menuItems, brand = defaultBrand, footer = defaultFooter }) {
+function Sidebar({ collapsed, isMobile, mobileOpen, onToggle, onClose, onExpand, items = menuItems, brand = defaultBrand, footer = defaultFooter, auth }) {
   const sidebarRef = useRef(null);
+  const [failedAvatar, setFailedAvatar] = useState(null);
   const compact = !isMobile && collapsed;
+  const metadata = auth?.user?.user_metadata;
+  const name = metadata?.full_name || metadata?.name || auth?.user?.email || 'ユーザー';
+  const avatar = metadata?.avatar_url || metadata?.picture;
 
   useEffect(() => {
     if (!isMobile || !mobileOpen) return;
@@ -60,7 +64,17 @@ function Sidebar({ collapsed, isMobile, mobileOpen, onToggle, onClose, onExpand,
             </div>
           ))}
         </nav>
-        <div className="sidebar-footer">{footer}</div>
+        {auth && footer === defaultFooter ? (
+          <button type="button" className="sidebar-footer" onClick={auth.accountAction}
+            disabled={auth.busy || auth.loading && !auth.user}
+            aria-label={auth.user ? `${name}：ログアウト` : 'Googleでログイン'}
+            title={auth.error || (auth.user ? 'ログアウト' : 'Googleでログイン')}>
+            {auth.user ? <>
+              <span className="avatar">{avatar && failedAvatar !== avatar ? <img src={avatar} alt="" referrerPolicy="no-referrer" onError={() => setFailedAvatar(avatar)} /> : name.slice(0, 1)}</span>
+              <span className="user-info">{name}<span>ログアウト</span></span>
+            </> : defaultFooter}
+          </button>
+        ) : <div className="sidebar-footer">{footer}</div>}
       </aside>
     </>
   );

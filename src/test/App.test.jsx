@@ -52,7 +52,7 @@ describe('再利用できるSPAレイアウト', () => {
     expect(container.querySelector('.main-shell').hasAttribute('inert')).toBe(true);
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'メニューを閉じる' }));
     await user.tab({ shift: true });
-    expect(document.activeElement).toBe(within(dialog).getByRole('link', { name: '設定' }));
+    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Googleでログイン' }));
     await user.tab();
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'メニューを閉じる' }));
     await user.click(within(dialog).getByRole('link', { name: 'ページ2' }));

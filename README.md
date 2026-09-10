@@ -132,7 +132,7 @@ PCの開閉状態だけを`localStorage`へ保存し、モバイルの一時的�
 | Output Directory | `dist` |
 | Install Command | 自動検出（npm / package-lock.json） |
 
-Node.jsは`package.json`の`engines`を満たすバージョンを使用します。このアプリに環境変数やVercel CLI、GitHub Actionsの追加設定は不要です。接続後はProduction Branch（通常`main`）へのpushで本番が更新され、他のブランチへのpushやPull RequestではPreview Deploymentが作成されます。
+Node.jsは`package.json`の`engines`を満たすバージョンを使用します。Googleログインには下記の環境変数をホスティング先にも設定し、再ビルドしてください。接続後はProduction Branch（通常`main`）へのpushで本番が更新され、他のブランチへのpushやPull RequestではPreview Deploymentが作成されます。
 
 ### 直接アクセスと再読み込み
 
@@ -155,3 +155,20 @@ Viteの`base`は`'/'`を明示し、BrowserRouterは`basename`なしのままで
 他の静的ホスティングへ`dist/`を配置する場合も、未解決のアプリURLを`index.html`にフォールバックさせてください。サブディレクトリへ公開する場合はViteの`base`と`BrowserRouter`の`basename`を揃えます。
 
 参考: [React Routerのルーティング](https://reactrouter.com/start/declarative/routing)、[Viteのガイド](https://vite.dev/guide/)。
+
+## Googleログインと権限
+
+1. `.env.example`を`.env`にコピーし、SupabaseのProject URLと`sb_publishable_...`形式のPublishable Keyを設定します。`.env`はGit管理対象外です。service_role / Secret Keyは使用しません。変更後は開発サーバーを再起動し、本番は再ビルドします。
+2. Google CloudでWeb用OAuthクライアントを作成し、リダイレクトURIにSupabaseのGoogle Provider画面に表示されるCallback URL（通常`https://PROJECT_REF.supabase.co/auth/v1/callback`）を登録します。Supabase AuthenticationのGoogle Providerを有効にし、Client IDとClient Secretを設定します。Google同意画面がテスト中なら対象アカウントをテストユーザーに登録します。
+3. Supabase AuthenticationのURL ConfigurationでSite URLを本番URLに設定し、Redirect URLsに`http://localhost:5173/`と本番URL（末尾`/`付き）を登録します。ログイン後は同じオリジンのホームへ戻ります。
+4. SQL Editorで[`supabase/auth.sql`](supabase/auth.sql)を実行します。既に`profiles`が存在する場合は既存定義と照合して適用してください。初回ログイン後、Authentication > UsersのUUIDを使い、許可するユーザーの`profiles`行に`role`（`admin` / `editor` / `viewer`）と`is_allowed = true`を管理者が設定します。自動登録・自己昇格は行いません。
+
+サイドパネル下部をクリックするとGoogleログインを開始します。ログイン後は名前・画像を表示し、同じ場所のクリックで現在のブラウザからログアウトします。長い名前は省略し、画像を取得できない場合は名前の先頭文字を表示します。
+
+ページ内では`const { auth } = useOutletContext()`で`auth.user` / `auth.role` / `auth.canEdit` / `auth.loading`を参照できます。`canEdit`は許可済みのadmin/editorのみtrueです。未ログイン、未登録、未許可、viewer、権限取得中・失敗時はfalseです。権限はユーザーメタデータではなく`profiles`から読み、認証イベント時に再取得します。
+
+現在のページには共有データの編集処理がなく、ブラウザ内のサイドパネル表示設定は全員が利用できます。今後の編集UIと実行ハンドラーでは`auth.canEdit`を確認し、**編集対象テーブルにも必ずRLSを適用**してください。SQL末尾にSELECT/INSERT/UPDATE/DELETEのポリシー例があります。`public.can_edit()`はDB側の現在の権限を参照するため、フロントの値を書き換えてもDBの許可は変更されません。プロフィールへのクライアント書込みは許可していません。
+
+認証・権限テストはSupabaseをモックして実行します。実際のGoogle OAuthとDB側RLSは上記設定後、許可済みeditor・viewer・未登録アカウントで確認してください。
+
+公式設定手順: [Google OAuth](https://supabase.com/docs/guides/auth/social-login/auth-google)、[RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)。

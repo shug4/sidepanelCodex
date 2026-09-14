@@ -7,10 +7,11 @@ import useAuth from '../hooks/useAuth';
 
 const mock = vi.hoisted(() => ({
   listener: null, initial: null, unsubscribe: vi.fn(), query: vi.fn(),
-  oauth: vi.fn(), signOut: vi.fn(), eq: vi.fn(),
+  oauth: vi.fn(), signOut: vi.fn(), eq: vi.fn(), initialize: vi.fn(),
 }));
 vi.mock('../lib/supabase', () => ({ supabase: {
   auth: {
+    initialize: (...args) => mock.initialize(...args),
     onAuthStateChange: (listener) => {
       mock.listener = listener;
       listener('INITIAL_SESSION', mock.initial);
@@ -32,7 +33,8 @@ const session = (id = 'google-user') => ({ access_token: `token-${id}`, user: {
 beforeEach(() => {
   vi.clearAllMocks();
   mock.initial = null;
-  mock.query.mockResolvedValue({ data: null, error: null });
+  mock.query.mockResolvedValue({ data: { role: 'viewer', is_allowed: true }, error: null });
+  mock.initialize.mockResolvedValue({ error: null });
   mock.oauth.mockResolvedValue({ error: null });
   mock.signOut.mockImplementation(async () => { mock.listener('SIGNED_OUT', null); return { error: null }; });
 });
@@ -71,12 +73,12 @@ describe('Google認証と権限', () => {
     expect(screen.queryByRole('dialog', { name: 'アカウントメニュー' })).toBeNull();
   });
 
-  it.each([['admin', '管理者'], ['editor', '編集者'], ['viewer', '閲覧者'], [null, '未設定']])('プロフィールの%sを%sと表示する', async (role, label) => {
+  it.each([['admin', '管理者'], ['editor', '編集者'], ['viewer', '閲覧者']])('プロフィールの%sを%sと表示する', async (role, label) => {
     mock.initial = session();
     mock.query.mockResolvedValue({ data: role ? { role, is_allowed: true } : null, error: null });
     const user = userEvent.setup();
     render(<BrowserRouter><App /></BrowserRouter>);
-    await user.click(screen.getByRole('button', { name: '山田 太郎：アカウントメニュー' }));
+    await user.click(await screen.findByRole('button', { name: '山田 太郎：アカウントメニュー' }));
     const menu = screen.getByRole('dialog', { name: 'アカウントメニュー' });
     expect(await within(menu).findByText(`権限：${label}`)).toBeTruthy();
     expect(menu.querySelector('img').getAttribute('src')).toBe('https://example.com/avatar.png');
@@ -87,7 +89,7 @@ describe('Google認証と権限', () => {
     mock.initial = signedIn ? session() : null;
     const user = userEvent.setup();
     render(<BrowserRouter><App /></BrowserRouter>);
-    const account = screen.getByRole('button', { name: signedIn ? '山田 太郎：アカウントメニュー' : 'ゲストモード：アカウントメニュー' });
+    const account = await screen.findByRole('button', { name: signedIn ? '山田 太郎：アカウントメニュー' : 'ゲストモード：アカウントメニュー' });
     const menu = () => screen.queryByRole('dialog', { name: 'アカウントメニュー' });
     await user.click(account);
     expect(account.getAttribute('aria-expanded')).toBe('true');
@@ -139,6 +141,7 @@ describe('Google認証と権限', () => {
     expect(result.current.canEdit).toBe(false);
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.canEdit).toBe(expected);
+    expect(result.current.user !== null).toBe(allowed && ['admin', 'editor', 'viewer'].includes(role));
     expect(mock.eq).toHaveBeenCalledWith('id', 'google-user');
     unmount();
     expect(mock.unsubscribe).toHaveBeenCalledOnce();
@@ -146,12 +149,24 @@ describe('Google認証と権限', () => {
 
   it.each(['missing', 'error', 'network'])('権限が %s ならメタデータがadminでも編集不可', async (mode) => {
     mock.initial = session();
+    if (mode === 'missing') mock.query.mockResolvedValue({ data: null, error: null });
     if (mode === 'error') mock.query.mockResolvedValue({ data: null, error: new Error('denied') });
     if (mode === 'network') mock.query.mockRejectedValue(new Error('offline'));
     const { result } = renderHook(() => useAuth());
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.canEdit).toBe(false);
     expect(result.current.role).toBeNull();
+    expect(result.current.user).toBeNull();
+    expect(mock.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
+
+  it('未招待のOAuth登録拒否を通知し、ゲスト状態を維持する', async () => {
+    mock.initialize.mockResolvedValue({ error: new Error('Database error saving new user') });
+    const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.error).toContain('管理者から招待・許可されたGoogleアカウント'));
+    expect(result.current.user).toBeNull();
+    expect(result.current.canView).toBe(false);
+    expect(mock.query).not.toHaveBeenCalled();
   });
 
   it('未ログイン時はプロフィールを取得せず編集不可', () => {
@@ -191,6 +206,7 @@ describe('Google認証と権限', () => {
     const api = action === 'login' ? mock.oauth : mock.signOut;
     api.mockResolvedValue({ error: new Error('failed') });
     const { result } = renderHook(() => useAuth());
+    await waitFor(() => expect(result.current.loading).toBe(false));
     await act(async () => { await result.current.accountAction(); });
     expect(alert).toHaveBeenCalledOnce();
     expect(result.current.busy).toBe(false);

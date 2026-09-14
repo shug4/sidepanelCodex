@@ -171,7 +171,16 @@ h1 { font-size: clamp(26px, 2.4vw, 32px); line-height: 1.45; letter-spacing: -.7
 .user-table-caption { text-align: left; padding: 16px; color: var(--muted); font-size: 12px; }
 .managed-user { display: flex; align-items: center; gap: 10px; min-width: 140px; }
 .managed-user small { display: block; margin-top: 4px; color: var(--muted); }
-.user-allowed { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.user-table .user-selection-cell { width: 48px; padding: 12px; text-align: center; }
+.user-row-checkbox { width: 18px; height: 18px; margin: 0; vertical-align: middle; cursor: pointer; accent-color: var(--accent); opacity: 0; }
+.user-table tr:hover .user-row-checkbox, .user-row-checkbox:checked, .user-row-checkbox:focus-visible { opacity: 1; }
+.user-row-checkbox:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.user-row-checkbox:disabled { cursor: default; }
+.user-row-selected { background: #f0f5ff; }
+.user-bulk-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; font-size: 14px; }
+.user-management .user-delete-button { color: #b42318; border-color: #f1b4af; background: #fff; }
+.user-management .user-delete-button:hover:not(:disabled) { background: #fff1f0; }
+@media (hover: none) { .user-row-checkbox { opacity: 1; } }
 .user-admin-note { color: var(--muted); font-size: 13px; }
 .user-invitations { margin-top: 32px; }
 .user-empty { margin: 0; padding: 20px; color: var(--muted); }

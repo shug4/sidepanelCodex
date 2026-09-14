@@ -5,14 +5,14 @@ import { supabase } from '../lib/supabase';
 
 const roles = { admin: '管理者', editor: '編集者', viewer: '閲覧者' };
 
-function UserRow({ user, currentUserId, busy, onSave }) {
+function UserRow({ user, currentUserId, busy, onSave, selected, onSelect }) {
   const [role, setRole] = useState(user.role);
-  const [allowed, setAllowed] = useState(user.is_allowed);
   const [imageFailed, setImageFailed] = useState(false);
   const protectedUser = user.id === currentUserId || user.role === 'admin';
-  const changed = role !== user.role || allowed !== user.is_allowed;
+  const changed = role !== user.role;
   return (
-    <tr>
+    <tr className={selected ? 'user-row-selected' : undefined}>
+      <td className="user-selection-cell">{!protectedUser && <input className="user-row-checkbox" type="checkbox" checked={selected} disabled={busy} onChange={(event) => onSelect(user.id, event.target.checked)} aria-label={`${user.email}を選択`} />}</td>
       <td><div className="managed-user"><span className="avatar">{user.avatar_url && !imageFailed
         ? <img src={user.avatar_url} alt="" referrerPolicy="no-referrer" onError={() => setImageFailed(true)} />
         : (user.name || 'U').slice(0, 1)}</span><span>{user.name || 'ユーザー'}{user.id === currentUserId && <small>自分</small>}</span></div></td>
@@ -20,8 +20,7 @@ function UserRow({ user, currentUserId, busy, onSave }) {
       <td>{protectedUser ? roles[user.role] : <select aria-label={`${user.email}の権限`} value={role} disabled={busy} onChange={(event) => setRole(event.target.value)}>
         <option value="editor">編集者</option><option value="viewer">閲覧者</option>
       </select>}</td>
-      <td><label className="user-allowed"><input type="checkbox" checked={allowed} disabled={protectedUser || busy} onChange={(event) => setAllowed(event.target.checked)} aria-label={`${user.email}の許可`} />{allowed ? '許可' : '未許可'}</label></td>
-      <td>{protectedUser ? <span className="user-admin-note">変更不可</span> : <button className="primary-button" type="button" disabled={!changed || busy} onClick={() => onSave('admin_update_user', { p_user_id: user.id, p_role: role, p_is_allowed: allowed }, 'ユーザー情報を更新しました。')}>保存</button>}</td>
+      <td>{protectedUser ? <span className="user-admin-note">変更不可</span> : <button className="primary-button" type="button" disabled={!changed || busy} onClick={() => onSave('admin_update_user', { p_user_id: user.id, p_role: role, p_is_allowed: user.is_allowed }, 'ユーザー情報を更新しました。')}>保存</button>}</td>
     </tr>
   );
 }
@@ -36,6 +35,7 @@ function AdminUsers({ currentUserId }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('viewer');
+  const [selectedIds, setSelectedIds] = useState([]);
   const mounted = useRef(false);
   const pending = useRef(false);
   const requestId = useRef(0);
@@ -44,7 +44,7 @@ function AdminUsers({ currentUserId }) {
   function reportError(failure) {
     if (!mounted.current) return;
     if (failure?.code === '42501') { setDenied(true); setData({ users: [], invitations: [] }); }
-    setError(failure?.code === '22023' ? 'メールアドレス・権限を確認してください。管理者アカウントは変更できません。' : '操作に失敗しました。接続と管理者権限を確認して、もう一度お試しください。');
+    setError(failure?.code === '22023' ? '選択したユーザー・メールアドレス・権限を確認してください。管理者アカウントは変更・削除できません。' : '操作に失敗しました。接続と管理者権限を確認して、もう一度お試しください。');
   }
 
   async function loadUsers() {
@@ -52,7 +52,10 @@ function AdminUsers({ currentUserId }) {
     const { data: result, error: failure } = await supabase.rpc('admin_get_users');
     if (!mounted.current || request !== requestId.current) return;
     if (failure) throw failure;
-    if (mounted.current) setData(result);
+    if (mounted.current) {
+      setData(result);
+      setSelectedIds((ids) => ids.filter((id) => result.users.some((user) => user.id === id && user.id !== currentUserId && user.role !== 'admin')));
+    }
   }
 
   useEffect(() => {
@@ -72,6 +75,10 @@ function AdminUsers({ currentUserId }) {
       const { error: failure } = await supabase.rpc(rpc, args);
       if (failure) throw failure;
       if (!mounted.current) return;
+      if (rpc === 'admin_delete_users') {
+        setSelectedIds([]);
+        setData((previous) => ({ ...previous, users: previous.users.filter((user) => !args.p_user_ids.includes(user.id)) }));
+      }
       await loadUsers();
       if (mounted.current) {
         setMessage(successMessage);
@@ -86,6 +93,12 @@ function AdminUsers({ currentUserId }) {
     pending.current = true; setLoading(true); setError('');
     try { await loadUsers(); } catch (failure) { reportError(failure); }
     finally { pending.current = false; if (mounted.current) setLoading(false); }
+  }
+
+  const sortedUsers = [...data.users].sort((a, b) => Number(b.role === 'admin') - Number(a.role === 'admin'));
+
+  function selectUser(id, checked) {
+    setSelectedIds((ids) => checked ? [...new Set([...ids, id])] : ids.filter((selectedId) => selectedId !== id));
   }
 
   if (denied) return <p role="alert">この画面は許可された管理者のみ利用できます。</p>;
@@ -104,8 +117,9 @@ function AdminUsers({ currentUserId }) {
       {error && <p role="alert">{error} <button className="primary-button" type="button" onClick={reload} disabled={busy || loading}>再読み込み</button></p>}
       {message && <p role="status">{message}</p>}
       {loading ? <p role="status">ユーザーを読み込んでいます…</p> : <>
-        <div className="content-panel user-table-scroll"><table className="user-table"><caption className="user-table-caption">これまでにログインしたアカウント</caption><thead><tr><th scope="col">ユーザー</th><th scope="col">メールアドレス</th><th scope="col">権限</th><th scope="col">許可状態</th><th scope="col">操作</th></tr></thead>
-          <tbody>{data.users.map((user) => <UserRow key={`${user.id}:${user.role}:${user.is_allowed}`} user={user} currentUserId={currentUserId} busy={busy} onSave={save} />)}</tbody></table>
+        {selectedIds.length > 0 && <div className="user-bulk-actions"><span>{selectedIds.length}件選択中</span><button type="button" className="primary-button user-delete-button" disabled={busy} onClick={() => save('admin_delete_users', { p_user_ids: selectedIds }, `${selectedIds.length}件のアカウントを削除しました。`)}>{busy ? '処理中…' : '選択したアカウントを削除'}</button></div>}
+        <div className="content-panel user-table-scroll"><table className="user-table"><caption className="user-table-caption">これまでにログインしたアカウント</caption><thead><tr><th scope="col" className="user-selection-cell" aria-label="選択"></th><th scope="col">ユーザー</th><th scope="col">メールアドレス</th><th scope="col">権限</th><th scope="col">操作</th></tr></thead>
+          <tbody>{sortedUsers.map((user) => <UserRow key={`${user.id}:${user.role}:${user.is_allowed}`} user={user} currentUserId={currentUserId} busy={busy} onSave={save} selected={selectedIds.includes(user.id)} onSelect={selectUser} />)}</tbody></table>
           {!data.users.length && !error && <p className="user-empty">ログイン済みのユーザーはいません。</p>}
         </div>
         <section className="user-invitations"><div className="section-heading"><h2>ログイン待ちの招待</h2></div>
@@ -120,7 +134,7 @@ export default function UserManagement() {
   const { auth } = useOutletContext();
   const canManage = auth.user && auth.role === 'admin' && auth.canEdit;
   return <>
-    <PageHeader eyebrow="ADMINISTRATION" title="ユーザー管理" description="ユーザーの権限と利用許可を管理します。" />
+    <PageHeader eyebrow="ADMINISTRATION" title="ユーザー管理" description="ユーザーの招待・権限変更・アカウント削除を行います。" />
     {auth.loading ? <p role="status">権限を確認しています…</p> : canManage && supabase ? <AdminUsers key={auth.user.id} currentUserId={auth.user.id} /> : <p role="alert">この画面は許可された管理者のみ利用できます。</p>}
   </>;
 }

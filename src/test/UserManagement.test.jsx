@@ -22,6 +22,7 @@ beforeEach(() => {
     if (name === 'admin_update_user') mock.users = mock.users.map((user) => user.id === args.p_user_id ? { ...user, role: args.p_role, is_allowed: args.p_is_allowed } : user);
     if (name === 'admin_invite_user') mock.invitations = [{ email: args.p_email, role: args.p_role }];
     if (name === 'admin_cancel_invitation') mock.invitations = [];
+    if (name === 'admin_delete_users') mock.users = mock.users.filter((user) => !args.p_user_ids.includes(user.id));
     return { error: null };
   });
 });
@@ -43,7 +44,8 @@ describe('管理者専用ユーザー管理', () => {
     expect(screen.getByRole('link', { name: 'ユーザー管理' })).toBeTruthy();
     const own = (await screen.findByText('管理者本人')).closest('tr');
     expect(within(own).getByText('管理者')).toBeTruthy();
-    expect(within(own).getByRole('checkbox').disabled).toBe(true);
+    expect(within(own).queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: '許可状態' })).toBeNull();
     expect(within(own).queryByRole('combobox')).toBeNull();
     expect(within(own).queryByRole('button', { name: '保存' })).toBeNull();
     const member = screen.getByText('登録ユーザー').closest('tr');
@@ -51,15 +53,14 @@ describe('管理者専用ユーザー管理', () => {
     expect(within(member).getByText('member@example.com')).toBeTruthy();
   });
 
-  it('editor/viewerと許可状態を明示的な保存で更新する', async () => {
+  it('editor/viewerを明示的な保存で更新し、既存の許可は変更しない', async () => {
     const user = userEvent.setup();
     renderApp();
     await screen.findByText('登録ユーザー');
     await user.selectOptions(screen.getByRole('combobox', { name: 'member@example.comの権限' }), 'editor');
-    await user.click(screen.getByRole('checkbox', { name: 'member@example.comの許可' }));
     expect(mock.rpc).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole('button', { name: '保存' }));
-    expect(mock.rpc).toHaveBeenCalledWith('admin_update_user', { p_user_id: 'member', p_role: 'editor', p_is_allowed: true });
+    expect(mock.rpc).toHaveBeenCalledWith('admin_update_user', { p_user_id: 'member', p_role: 'editor', p_is_allowed: false });
     expect(await screen.findByText('ユーザー情報を更新しました。')).toBeTruthy();
     expect(screen.getByRole('button', { name: '保存' }).disabled).toBe(true);
   });
@@ -84,7 +85,7 @@ describe('管理者専用ユーザー管理', () => {
     renderApp();
     await screen.findByText('登録ユーザー');
     mock.rpc.mockResolvedValue({ error: { code: '42501' } });
-    await user.click(screen.getByRole('checkbox', { name: 'member@example.comの許可' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'member@example.comの権限' }), 'editor');
     await user.click(screen.getByRole('button', { name: '保存' }));
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.queryByText('登録ユーザー')).toBeNull();
@@ -98,6 +99,54 @@ describe('管理者専用ユーザー管理', () => {
     await user.click(await screen.findByRole('button', { name: '再読み込み' }));
     expect(await screen.findByText('登録ユーザー')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('左端のチェックで複数選択し、表の外のボタンから一括削除できる', async () => {
+    mock.users.push({ id: 'member2', name: '別ユーザー', email: 'second@example.com', role: 'editor', is_allowed: true });
+    const user = userEvent.setup();
+    renderApp();
+    const first = await screen.findByRole('checkbox', { name: 'member@example.comを選択' });
+    expect(first.closest('td')).toBe(first.closest('tr').cells[0]);
+    expect(screen.queryByRole('button', { name: '選択したアカウントを削除' })).toBeNull();
+    await user.click(first);
+    await user.click(screen.getByRole('checkbox', { name: 'second@example.comを選択' }));
+    expect(screen.getByText('2件選択中')).toBeTruthy();
+    const remove = screen.getByRole('button', { name: '選択したアカウントを削除' });
+    expect(remove.closest('table')).toBeNull();
+    await user.click(remove);
+    expect(mock.rpc).toHaveBeenCalledWith('admin_delete_users', { p_user_ids: ['member', 'member2'] });
+    expect(await screen.findByText('2件のアカウントを削除しました。')).toBeTruthy();
+    expect(screen.queryByText('member@example.com')).toBeNull();
+    expect(screen.queryByText('second@example.com')).toBeNull();
+    expect(screen.getByRole('cell', { name: 'admin@example.com' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '選択したアカウントを削除' })).toBeNull();
+  });
+
+  it('全ての選択を解除すると削除ボタンを隠す', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    const checkbox = await screen.findByRole('checkbox', { name: 'member@example.comを選択' });
+    await user.click(checkbox);
+    await user.click(checkbox);
+    expect(screen.queryByRole('button', { name: '選択したアカウントを削除' })).toBeNull();
+    expect(mock.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('削除中の二重操作を防ぎ、失敗時は選択を残して再試行できる', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    const checkbox = await screen.findByRole('checkbox', { name: 'member@example.comを選択' });
+    await user.click(checkbox);
+    let resolve;
+    mock.rpc.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    await user.dblClick(screen.getByRole('button', { name: '選択したアカウントを削除' }));
+    expect(mock.rpc.mock.calls.filter(([name]) => name === 'admin_delete_users')).toHaveLength(1);
+    expect(checkbox.disabled).toBe(true);
+    await act(async () => resolve({ error: { code: 'NETWORK' } }));
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(checkbox.checked).toBe(true);
+    await user.click(screen.getByRole('button', { name: '選択したアカウントを削除' }));
+    expect(await screen.findByText('1件のアカウントを削除しました。')).toBeTruthy();
   });
 
   it('待機中に非管理者へ切り替わっても応答を画面に表示しない', async () => {

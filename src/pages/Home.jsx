@@ -5,7 +5,8 @@ import PageHeader from '../components/PageHeader';
 const pages = [
   { title: 'ページ1', description: '情報をまとめる、最初のページ。', path: '/page1', icon: FileText, number: '01' },
   { title: 'ページ2', description: 'アイデアを広げる、もうひとつのページ。', path: '/page2', icon: Layers, number: '02' },
-  { title: '設定', description: 'ワークスペースの表示を調整。', path: '/settings', icon: Settings, number: '03' },
+  { title: 'ページ3', description: '権限に応じたメッセージを表示。', path: '/page3', icon: FileText, number: '03' },
+  { title: '設定', description: 'ワークスペースの表示を調整。', path: '/settings', icon: Settings, number: '04' },
 ];
 
 export default function Home() {
@@ -18,7 +19,7 @@ export default function Home() {
         <p>ページを選んで、必要な情報や作業をひとつの場所に。</p>
         <Link to="/page1" className="primary-button">ページ1を開く<ArrowRight size={17} aria-hidden="true" /></Link>
       </section>
-      <div className="section-heading"><h2>ページ一覧</h2><span>3 ページ</span></div>
+      <div className="section-heading"><h2>ページ一覧</h2><span>{pages.length} ページ</span></div>
       <div className="page-grid">
         {pages.map(({ title, description, path, icon: Icon, number }) => (
           <Link className="page-card" to={path} key={path}>

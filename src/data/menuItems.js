@@ -6,6 +6,7 @@ export const menuItems = [
   { id: 'home', label: 'ホーム', icon: Home, path: '/', category: 'ワークスペース' },
   { id: 'page1', label: 'ページ1', icon: FileText, path: '/page1', category: 'ワークスペース' },
   { id: 'page2', label: 'ページ2', icon: Layers, path: '/page2', category: 'ワークスペース' },
+  { id: 'page3', label: 'ページ3', icon: FileText, path: '/page3', category: 'ワークスペース' },
   { id: 'settings', label: '設定', icon: Settings, path: '/settings', category: '管理' },
   { id: 'users', label: 'ユーザー管理', icon: Users, path: '/users', category: '管理', adminOnly: true },
 ];
